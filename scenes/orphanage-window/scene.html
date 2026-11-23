@@ -1,0 +1,412 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Orphanage Window</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  svg { display: block; width: 1920px; height: 1080px; }
+</style>
+</head>
+<body>
+<!--
+  "Orphanage Window" -- 5 s animated shot, flat pastel paper-cutout style.
+  An original boy character sits alone on a bench, gazing out of the window.
+  render(t) draws the frame at time t (seconds, 0..5). Open in a browser to
+  preview (it loops); render.js captures frames and encodes the MP4.
+-->
+<svg id="svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#c7c1ec"/>
+    <stop offset="0.45" stop-color="#f4c7c3"/>
+    <stop offset="0.8" stop-color="#fbe2b6"/>
+    <stop offset="1" stop-color="#fff2cf"/>
+  </linearGradient>
+  <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ddd3ee"/>
+    <stop offset="1" stop-color="#ece3f2"/>
+  </linearGradient>
+  <radialGradient id="wallGlow" cx="1270" cy="470" r="820" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#fff3cf" stop-opacity="0.9"/>
+    <stop offset="0.5" stop-color="#fde6c6" stop-opacity="0.35"/>
+    <stop offset="1" stop-color="#fde6c6" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="beam" gradientUnits="userSpaceOnUse" x1="1400" y1="380" x2="520" y2="1060">
+    <stop offset="0" stop-color="#fff4c4" stop-opacity="0.4"/>
+    <stop offset="0.5" stop-color="#fff0bd" stop-opacity="0.28"/>
+    <stop offset="1" stop-color="#fff0bd" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="vig" cx="900" cy="540" r="1150" gradientUnits="userSpaceOnUse">
+    <stop offset="0.55" stop-color="#4b3b63" stop-opacity="0"/>
+    <stop offset="1" stop-color="#4b3b63" stop-opacity="0.28"/>
+  </radialGradient>
+  <filter id="paper" x="-10%" y="-10%" width="120%" height="130%">
+    <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#4f3f68" flood-opacity="0.2"/>
+  </filter>
+  <filter id="paperSoft" x="-10%" y="-10%" width="120%" height="130%">
+    <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#8a6f9a" flood-opacity="0.22"/>
+  </filter>
+  <filter id="blur14" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14"/></filter>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="5" stitchTiles="stitch"/>
+    <feColorMatrix type="saturate" values="0"/>
+  </filter>
+  <clipPath id="glass"><path d="M1010 730 L1010 300 A260 148 0 0 1 1530 300 L1530 730 Z"/></clipPath>
+  <clipPath id="eyeClipL"><ellipse cx="494" cy="432" rx="32" ry="36"/></clipPath>
+  <clipPath id="eyeClipR"><ellipse cx="586" cy="432" rx="32" ry="36"/></clipPath>
+</defs>
+<g id="camera"></g>
+</svg>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const cam = document.getElementById('camera');
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || cam).appendChild(e);
+  return e;
+}
+function g(attrs, parent) { return el('g', attrs || {}, parent); }
+function html(parent, s) { parent.insertAdjacentHTML('beforeend', s); return parent.lastElementChild; }
+
+// deterministic random
+let seed = 11;
+function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+
+// paper cloud: overlapping round puffs on a flat base, cut out as one piece
+function cloudShapes(parent, w, h, fill, opacity) {
+  const cg = g({ opacity: opacity == null ? 1 : opacity }, parent);
+  const n = 4 + Math.floor(rnd() * 2);
+  for (let i = 0; i < n; i++) {
+    const u = (i + 0.5) / n;
+    const r = h * (0.45 + 0.55 * Math.sin(u * Math.PI)) * (0.85 + rnd() * 0.3);
+    el('circle', { cx: -w / 2 + u * w, cy: -r * 0.6, r }, cg).setAttribute('fill', fill);
+  }
+  el('rect', { x: -w / 2 - h * 0.3, y: -h * 0.35, width: w + h * 0.6, height: h * 0.35 + 4, rx: h * 0.17, fill }, cg);
+  return cg;
+}
+function starPath(r) {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const rr = i % 2 ? r * 0.48 : r;
+    d += (i ? 'L' : 'M') + (Math.cos(a) * rr).toFixed(1) + ' ' + (Math.sin(a) * rr).toFixed(1) + ' ';
+  }
+  return d + 'Z';
+}
+
+// ------------------------------------------------------------------ room
+el('rect', { width: 1920, height: 1080, fill: 'url(#wall)' });
+el('rect', { width: 1920, height: 830, fill: 'url(#wallGlow)' });
+// soft wallpaper dots
+const dots = g({ opacity: 0.35 });
+for (let y = 40; y < 640; y += 70)
+  for (let x = (y / 70) % 2 ? 35 : 0; x < 1920; x += 70)
+    el('circle', { cx: x, cy: y, r: 4, fill: '#c9bce0' }, dots);
+// wainscot
+el('rect', { x: 0, y: 640, width: 1920, height: 195, fill: '#f0d6d4' });
+el('rect', { x: 0, y: 630, width: 1920, height: 18, fill: '#e2bcc0', filter: 'url(#paperSoft)' });
+for (let x = 20; x < 1920; x += 170)
+  el('rect', { x, y: 672, width: 140, height: 130, rx: 8, fill: '#e9c9ca' });
+el('rect', { x: 0, y: 812, width: 1920, height: 24, fill: '#d9aeb4' });
+// floor
+el('rect', { x: 0, y: 834, width: 1920, height: 246, fill: '#ecdac6' });
+for (let i = -10; i < 28; i++) {
+  const x0 = 1100 + i * 110, x1 = 1100 + i * 110 * 1.9;
+  el('line', { x1: x0, y1: 834, x2: x1, y2: 1080, stroke: '#dfc8b1', 'stroke-width': 3 });
+}
+el('rect', { x: 0, y: 834, width: 1920, height: 6, fill: '#d2b49d' });
+
+// ------------------------------------------------------------------ window
+el('path', { d: 'M985 752 L985 300 A285 170 0 0 1 1555 300 L1555 752 Z', fill: '#fbf5ec', filter: 'url(#paper)' });
+const view = g({ 'clip-path': 'url(#glass)' });
+el('rect', { x: 1000, y: 140, width: 540, height: 600, fill: 'url(#sky)' }, view);
+const rays = g({}, view);
+for (let i = 0; i < 18; i++) {
+  const a0 = i * 20, a1 = a0 + 10;
+  const p = (a) => [1300 + Math.cos(a * Math.PI / 180) * 900, 640 + Math.sin(a * Math.PI / 180) * 900];
+  const [x0, y0] = p(a0), [x1, y1] = p(a1);
+  el('polygon', { points: `1300,640 ${x0},${y0} ${x1},${y1}`, fill: '#fff6d6', opacity: 0.45 }, rays);
+}
+el('circle', { cx: 1300, cy: 640, r: 64, fill: '#fff4c8' }, view);
+el('circle', { cx: 1300, cy: 640, r: 46, fill: '#ffeaa6' }, view);
+// clouds in three layers (parallax)
+const clouds = [];
+[[1080, 300, 230, 60, '#efe6f7', 6], [1420, 260, 200, 52, '#f6eefa', 4], [1180, 430, 300, 70, '#e8dcf2', 10],
+ [1480, 470, 220, 58, '#efe3f4', 8], [1050, 560, 260, 64, '#e2d3ee', 14]].forEach(([x, y, w, h, c, sp]) => {
+  const cg = g({ filter: 'url(#paperSoft)' }, view);
+  cloudShapes(cg, w, h * 0.7, c);
+  cloudShapes(cg, w * 0.6, h * 0.4, '#ffffff', 0.5).setAttribute('transform', `translate(${-w * 0.1} ${-h * 0.25})`);
+  clouds.push({ node: cg, x, y, sp });
+});
+// distant rooftops (cut paper)
+const far = g({ filter: 'url(#paperSoft)' }, view);
+let x = 1000;
+while (x < 1540) {
+  const w = 40 + rnd() * 50, h = 30 + rnd() * 50;
+  el('rect', { x, y: 670 - h, width: w + 1, height: h + 80, fill: '#c9b2d6' }, far);
+  if (rnd() < 0.5) el('polygon', { points: `${x},${670 - h} ${x + w / 2},${650 - h} ${x + w},${670 - h}`, fill: '#c9b2d6' }, far);
+  x += w;
+}
+const near = g({ filter: 'url(#paperSoft)' }, view);
+x = 990;
+while (x < 1550) {
+  const w = 80 + rnd() * 50, top = 690 - rnd() * 24;
+  el('polygon', { points: `${x},${top + 16} ${x + w / 2},${top - 16} ${x + w},${top + 16} ${x + w},740 ${x},740`, fill: '#a98dbb' }, near);
+  if (rnd() < 0.7) el('rect', { x: x + 14 + rnd() * (w - 40), y: top - 18, width: 14, height: 28, fill: '#a98dbb' }, near);
+  if (rnd() < 0.6) el('rect', { x: x + w / 2 - 6, y: top + 24, width: 12, height: 14, rx: 2, fill: '#ffe39a' }, near);
+  x += w - 4;
+}
+// birds
+const birds = [];
+[[0, 0, 1], [-46, 24, 0.8], [-90, -10, 0.7]].forEach(([dx, dy, s]) => {
+  const b = el('path', { fill: 'none', stroke: '#6d5a86', 'stroke-width': 4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, view);
+  birds.push({ node: b, dx, dy, s });
+});
+// window frame bars + sill
+el('rect', { x: 1262, y: 150, width: 16, height: 584, fill: '#fbf5ec' });
+el('rect', { x: 1010, y: 294, width: 520, height: 14, fill: '#fbf5ec' });
+el('rect', { x: 1010, y: 500, width: 520, height: 14, fill: '#fbf5ec' });
+el('rect', { x: 960, y: 740, width: 620, height: 30, rx: 6, fill: '#fffaf2', filter: 'url(#paper)' });
+
+// curtains
+function curtain(mirror) {
+  const outer = g({ transform: mirror ? 'matrix(-1 0 0 1 2540 0)' : '' });
+  const c = g({ filter: 'url(#paper)' }, outer);
+  el('path', { d: 'M930 118 L1060 118 C1050 230 1040 360 1052 470 C1062 520 1040 580 1010 660 C1000 700 1004 740 1018 780 L942 784 C926 720 934 650 956 590 C970 540 954 500 944 470 C924 360 922 230 930 118 Z', fill: '#e8aab6' }, c);
+  el('path', { d: 'M960 130 C956 250 960 360 978 470 L996 470 C980 360 978 250 984 130 Z M972 520 C982 600 966 690 974 780 L990 780 C984 690 998 600 990 520 Z', fill: '#d892a1' }, c);
+  el('path', { d: 'M938 470 C980 492 1020 492 1060 470 L1062 494 C1022 512 980 512 936 494 Z', fill: '#f3cf6a' }, c);
+  return c;
+}
+const curtL = curtain(false), curtR = curtain(true);
+el('rect', { x: 900, y: 106, width: 740, height: 14, rx: 7, fill: '#b993c4', filter: 'url(#paperSoft)' });
+el('circle', { cx: 900, cy: 113, r: 14, fill: '#b993c4' });
+el('circle', { cx: 1640, cy: 113, r: 14, fill: '#b993c4' });
+
+// ------------------------------------------------------------------ light beam + motes
+const beamG = g({ style: 'mix-blend-mode:screen' });
+el('polygon', { points: '1010,300 1530,430 1530,730 1210,1080 300,1080', fill: 'url(#beam)', filter: 'url(#blur14)' }, beamG);
+el('polygon', { points: '930,880 1460,880 1240,1080 380,1080', fill: '#fff3c6', opacity: 0.45, filter: 'url(#blur14)' }, beamG);
+const motes = [];
+for (let i = 0; i < 46; i++) {
+  const m = el('circle', { r: (1.5 + rnd() * 2.5).toFixed(1), fill: '#fffbe6' });
+  motes.push({ node: m, u: rnd(), v: rnd(), ph: rnd() * 6.28, sp: 6 + rnd() * 10 });
+}
+
+// ------------------------------------------------------------------ props
+// shelf with books and a toy boat (left wall)
+const shelf = g({ filter: 'url(#paperSoft)' });
+el('rect', { x: 80, y: 330, width: 250, height: 16, rx: 4, fill: '#c99b72' }, shelf);
+[[100, 24, 74, '#9fb5d9'], [126, 20, 62, '#e7a9a1'], [148, 28, 80, '#f3cf6a'], [178, 18, 58, '#b5d1b6']].forEach(([bx, bw, bh, c]) =>
+  el('rect', { x: bx, y: 330 - bh, width: bw, height: bh, rx: 3, fill: c }, shelf));
+el('path', { d: 'M236 318 L316 318 L304 330 L248 330 Z', fill: '#c48a62' }, shelf);
+el('rect', { x: 273, y: 262, width: 4, height: 56, fill: '#a87452' }, shelf);
+el('path', { d: 'M279 266 L306 312 L279 312 Z', fill: '#fffaf2' }, shelf);
+
+// empty bed (right) with a waiting teddy
+el('ellipse', { cx: 1770, cy: 900, rx: 210, ry: 18, fill: '#b99aae', opacity: 0.35 });
+const bed = g({ filter: 'url(#paper)' });
+el('rect', { x: 1880, y: 600, width: 18, height: 300, rx: 8, fill: '#9fa9cc' }, bed);
+el('rect', { x: 1610, y: 680, width: 18, height: 220, rx: 8, fill: '#9fa9cc' }, bed);
+el('rect', { x: 1616, y: 740, width: 276, height: 64, rx: 14, fill: '#fbf5ec' }, bed);
+el('path', { d: 'M1616 744 L1892 744 L1892 812 Q1754 826 1616 812 Z', fill: '#b9a5d8' }, bed);
+el('rect', { x: 1616, y: 760, width: 276, height: 10, fill: '#d7c9ec' }, bed);
+el('path', { d: 'M1770 744 Q1768 714 1820 712 Q1876 712 1880 744 Z', fill: '#ffffff' }, bed);
+const teddy = g({ transform: 'translate(1720 710)', filter: 'url(#paperSoft)' });
+el('circle', { cx: -16, cy: -34, r: 10, fill: '#d8a77c' }, teddy);
+el('circle', { cx: 16, cy: -34, r: 10, fill: '#d8a77c' }, teddy);
+el('ellipse', { cx: 0, cy: 12, rx: 26, ry: 24, fill: '#d8a77c' }, teddy);
+el('circle', { cx: 0, cy: -18, r: 21, fill: '#e2b48a' }, teddy);
+el('ellipse', { cx: 0, cy: -11, rx: 9, ry: 7, fill: '#f4dcc0' }, teddy);
+el('circle', { cx: 0, cy: -14, r: 3, fill: '#4a3a4f' }, teddy);
+el('circle', { cx: -8, cy: -23, r: 2.8, fill: '#4a3a4f' }, teddy);
+el('circle', { cx: 8, cy: -23, r: 2.8, fill: '#4a3a4f' }, teddy);
+el('rect', { x: -6, y: 4, width: 10, height: 8, rx: 2, fill: '#b9a5d8' }, teddy);
+
+// hanging paper stars (nursery mobile)
+const stars = [];
+[[130, 150, 34], [270, 230, 26], [800, 190, 30], [1720, 250, 30], [1850, 140, 26]].forEach(([sx, len, r], i) => {
+  const sg = g({});
+  el('line', { x1: sx, y1: 0, x2: sx, y2: len, stroke: '#c9b48a', 'stroke-width': 2 }, sg);
+  const st = g({ transform: `translate(${sx} ${len + r})`, filter: 'url(#paperSoft)' }, sg);
+  el('path', { d: starPath(r), fill: '#f3cf6a' }, st);
+  el('path', { d: starPath(r * 0.55), fill: '#fbe39c', transform: `translate(${-r * 0.1} ${-r * 0.1})` }, st);
+  stars.push({ node: sg, x: sx, ph: i * 1.3 });
+});
+
+// ------------------------------------------------------------------ bench
+el('ellipse', { cx: 550, cy: 866, rx: 230, ry: 18, fill: '#b99aae', opacity: 0.4 });
+const bench = g({ filter: 'url(#paper)' });
+el('rect', { x: 385, y: 712, width: 22, height: 150, rx: 6, fill: '#b98a62' }, bench);
+el('rect', { x: 693, y: 712, width: 22, height: 150, rx: 6, fill: '#b98a62' }, bench);
+el('rect', { x: 370, y: 712, width: 360, height: 18, rx: 4, fill: '#c4966d' }, bench);
+el('rect', { x: 358, y: 690, width: 384, height: 26, rx: 8, fill: '#d8ab80' }, bench);
+
+// ------------------------------------------------------------------ the boy (original character)
+const SKIN = '#f3c9a3', SKIN_D = '#e2ad86', HAIR = '#7a4f33', HAIR_D = '#5f3b25';
+const SWEATER = '#7fb0b4', SWEATER_D = '#6597a0', SHORTS = '#8b6b4e', INK = '#3d2c3e';
+const boy = g({ filter: 'url(#paper)' });
+
+// legs (dangling, swing from the knee)
+function leg(cx) {
+  const lg = g({}, boy);
+  el('rect', { x: cx - 13, y: 706, width: 26, height: 74, rx: 11, fill: SKIN }, lg);
+  el('rect', { x: cx - 15, y: 766, width: 30, height: 20, rx: 6, fill: '#fbf5ec' }, lg);
+  el('rect', { x: cx - 15, y: 772, width: 30, height: 5, fill: '#e8aab6' }, lg);
+  el('path', { d: `M${cx - 22} 800 Q${cx - 24} 782 ${cx} 782 Q${cx + 24} 782 ${cx + 22} 800 Q${cx + 22} 812 ${cx} 812 Q${cx - 22} 812 ${cx - 22} 800 Z`, fill: '#6e4a5a' }, lg);
+  return lg;
+}
+const legL = leg(512), legR = leg(568);
+// shorts
+el('rect', { x: 474, y: 664, width: 132, height: 54, rx: 16, fill: SHORTS }, boy);
+el('rect', { x: 536, y: 676, width: 8, height: 40, rx: 3, fill: '#76583f' }, boy);
+
+// torso (breathes / sighs)
+const torso = g({}, boy);
+el('rect', { x: 518, y: 528, width: 44, height: 30, fill: SKIN_D }, torso);
+el('path', { d: 'M478 552 Q540 538 602 552 L616 688 Q540 700 464 688 Z', fill: SWEATER }, torso);
+for (const y of [600, 640]) el('path', { d: `M471 ${y} Q540 ${y + 10} 609 ${y} L611 ${y + 12} Q540 ${y + 22} 469 ${y + 12} Z`, fill: SWEATER_D }, torso);
+el('path', { d: 'M512 548 L540 572 L568 548 Q540 540 512 548 Z', fill: '#fbf5ec' }, torso);
+el('path', { d: 'M520 548 L540 566 L560 548', fill: 'none', stroke: SWEATER_D, 'stroke-width': 3 }, torso);
+// arms resting in the lap
+el('path', { d: 'M482 558 Q456 588 460 640 Q464 672 504 676 L514 654 Q488 650 488 628 Q488 594 500 568 Z', fill: SWEATER }, torso);
+el('path', { d: 'M598 558 Q624 588 620 640 Q616 672 576 676 L566 654 Q592 650 592 628 Q592 594 580 568 Z', fill: SWEATER }, torso);
+el('ellipse', { cx: 474, cy: 628, rx: 11, ry: 14, fill: '#e8aab6' }, torso); // elbow patch
+el('ellipse', { cx: 522, cy: 668, rx: 22, ry: 15, fill: SKIN }, torso);
+el('ellipse', { cx: 558, cy: 668, rx: 22, ry: 15, fill: SKIN_D }, torso);
+el('ellipse', { cx: 545, cy: 664, rx: 18, ry: 13, fill: SKIN }, torso);
+
+// head
+const head = g({}, boy);
+el('ellipse', { cx: 430, cy: 444, rx: 17, ry: 25, fill: SKIN_D }, head);
+el('ellipse', { cx: 650, cy: 444, rx: 17, ry: 25, fill: SKIN_D }, head);
+el('path', { d: 'M432 340 Q434 284 540 282 Q646 284 648 340 L652 470 Q650 554 540 556 Q430 554 428 470 Z', fill: SKIN }, head);
+el('path', { d: 'M428 450 L428 470 Q430 554 540 556 Q470 540 450 500 Q436 476 428 450 Z', fill: SKIN_D, opacity: 0.6 }, head);
+// hair: brown cap with a side-swept fringe and a cowlick
+el('path', { d: 'M426 412 Q416 300 470 280 Q540 258 612 280 Q664 300 654 412 Q648 372 632 356 Q600 336 560 342 Q520 334 486 342 Q452 354 438 380 Q430 394 426 412 Z', fill: HAIR }, head);
+el('path', { d: 'M470 346 Q520 312 590 326 Q626 336 642 372 Q600 350 560 354 Q514 352 470 346 Z', fill: HAIR_D }, head);
+el('path', { d: 'M532 272 Q540 244 566 246 Q550 254 552 276 Z', fill: HAIR }, head);
+el('path', { d: 'M480 296 Q530 280 590 292', fill: 'none', stroke: '#9a6a48', 'stroke-width': 6, 'stroke-linecap': 'round' }, head);
+// eyes with droopy lids
+function eye(cx, clip, tilt) {
+  const eg = g({}, head);
+  el('ellipse', { cx, cy: 432, rx: 32, ry: 36, fill: '#ffffff' }, eg);
+  const inner = g({ 'clip-path': `url(#${clip})` }, eg);
+  const pupil = g({}, inner);
+  el('circle', { cx, cy: 432, r: 15, fill: '#7a5236' }, pupil);
+  el('circle', { cx, cy: 432, r: 8.5, fill: '#2b1c22' }, pupil);
+  el('circle', { cx: cx + 5, cy: 426, r: 4.5, fill: '#ffffff' }, pupil);
+  const lid = g({}, inner);
+  const lidRect = el('rect', { x: cx - 50, y: 380, width: 100, height: 30, fill: SKIN }, lid);
+  const lidLine = el('line', { x1: cx - 50, x2: cx + 50, y1: 410, y2: 410, stroke: INK, 'stroke-width': 5, 'stroke-linecap': 'round' }, lid);
+  el('ellipse', { cx, cy: 432, rx: 32, ry: 36, fill: 'none', stroke: INK, 'stroke-width': 3 }, eg);
+  return { cx, pupil, lid, lidRect, lidLine, tilt };
+}
+const eyeL = eye(494, 'eyeClipL', -12), eyeR = eye(586, 'eyeClipR', 12);
+const browL = el('path', { fill: 'none', stroke: HAIR_D, 'stroke-width': 8, 'stroke-linecap': 'round' }, head);
+const browR = el('path', { fill: 'none', stroke: HAIR_D, 'stroke-width': 8, 'stroke-linecap': 'round' }, head);
+el('path', { d: 'M532 474 Q541 482 552 474', fill: 'none', stroke: SKIN_D, 'stroke-width': 5, 'stroke-linecap': 'round' }, head);
+for (const [fx, fy] of [[478, 482], [490, 488], [502, 481], [580, 481], [592, 488], [604, 482]])
+  el('circle', { cx: fx, cy: fy, r: 2.6, fill: '#d99a78' }, head);
+el('ellipse', { cx: 476, cy: 500, rx: 18, ry: 9, fill: '#f2a0a0', opacity: 0.45 }, head);
+el('ellipse', { cx: 604, cy: 500, rx: 18, ry: 9, fill: '#f2a0a0', opacity: 0.45 }, head);
+const mouth = el('path', { fill: 'none', stroke: INK, 'stroke-width': 5, 'stroke-linecap': 'round' }, head);
+
+// ------------------------------------------------------------------ grade
+el('rect', { width: 1920, height: 1080, fill: 'url(#vig)' });
+el('rect', { width: 1920, height: 1080, filter: 'url(#grain)', opacity: 0.05, style: 'mix-blend-mode:multiply' });
+
+// ------------------------------------------------------------------ animation
+const DUR = 5;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const smooth = (a, b, t) => { const u = clamp((t - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+const lerp = (a, b, u) => a + (b - a) * u;
+function blink(t, at) { const d = Math.abs(t - at); return d < 0.09 ? 1 : d < 0.16 ? 1 - (d - 0.09) / 0.07 : 0; }
+
+function render(t) {
+  // slow push-in toward the boy
+  const s = 1 + 0.075 * smooth(0, DUR, t);
+  cam.setAttribute('transform', `translate(700 560) scale(${s}) translate(-700 -560)`);
+
+  // mood: 0 = gazing up at the window, 1 = eyes drop (loneliness); then the birds pull him back (curiosity)
+  const mood = smooth(1.7, 2.5, t) * (1 - smooth(3.5, 4.1, t));
+  const cur = smooth(3.6, 4.3, t);
+  const birdPull = smooth(3.4, 4.8, t);
+
+  const gx = lerp(lerp(10, 3, mood), 14, birdPull * (1 - mood));
+  const gy = lerp(lerp(-8, 9, mood), -11, birdPull * (1 - mood));
+  let lidCover = lerp(lerp(0.36, 0.5, mood), 0.18, cur);
+  lidCover = Math.max(lidCover, blink(t, 1.15), blink(t, 4.55));
+  for (const e of [eyeL, eyeR]) {
+    e.pupil.setAttribute('transform', `translate(${gx.toFixed(2)} ${gy.toFixed(2)})`);
+    const y = 396 + lidCover * 72;
+    e.lidRect.setAttribute('y', 340);
+    e.lidRect.setAttribute('height', (y - 340).toFixed(2));
+    e.lidLine.setAttribute('y1', y.toFixed(2));
+    e.lidLine.setAttribute('y2', y.toFixed(2));
+    e.lid.setAttribute('transform', `rotate(${e.tilt * (1 - 0.6 * cur)} ${e.cx} 432)`);
+  }
+  // brows: inner ends lifted (wistful), rising with curiosity
+  const by = -7 * cur + 3 * mood;
+  const tiltB = 16 - 8 * cur;
+  browL.setAttribute('d', `M462 ${398 + by} Q492 ${392 + by} 522 ${398 + by - tiltB}`);
+  browR.setAttribute('d', `M558 ${398 + by - tiltB} Q588 ${392 + by} 618 ${398 + by}`);
+  // mouth: small frown that softens as curiosity takes over
+  const mEnd = lerp(lerp(514, 517, mood), 510, cur);
+  const mCtl = lerp(lerp(500, 496, mood), 507, cur);
+  const mW = lerp(22, 15, cur);
+  mouth.setAttribute('d', `M${541 - mW} ${mEnd.toFixed(2)} Q541 ${mCtl.toFixed(2)} ${541 + mW} ${mEnd.toFixed(2)}`);
+
+  // head follows the gaze
+  const sigh = Math.sin(clamp((t - 2.55) / 0.9, 0, 1) * Math.PI);
+  const breath = Math.sin(t * Math.PI * 2 / 2.4);
+  const hr = lerp(lerp(-3.5, 2.5, mood), -5, birdPull * (1 - mood));
+  head.setAttribute('transform', `translate(${(hr * 0.8).toFixed(2)} ${(mood * 5 - sigh * 5 + breath * 1.2).toFixed(2)}) rotate(${hr.toFixed(2)} 540 550)`);
+  torso.setAttribute('transform', `translate(0 ${(-sigh * 6).toFixed(2)}) translate(540 688) scale(1 ${(1 + 0.012 * breath + 0.02 * sigh).toFixed(4)}) translate(-540 -688)`);
+
+  // dangling feet, slowing while he is sad
+  const amp = 7 * (1 - 0.65 * mood);
+  const ph = t * Math.PI * 2 / 1.5;
+  legL.setAttribute('transform', `rotate(${(amp * Math.sin(ph)).toFixed(2)} 512 712)`);
+  legR.setAttribute('transform', `rotate(${(-amp * Math.sin(ph + 0.6)).toFixed(2)} 568 712)`);
+
+  // window world
+  for (const c of clouds) c.node.setAttribute('transform', `translate(${(c.x + c.sp * t).toFixed(2)} ${c.y})`);
+  rays.setAttribute('transform', `rotate(${(t * 2.4).toFixed(2)} 1300 640)`);
+  const bt = (t - 2.8) / 2.2;
+  for (const b of birds) {
+    const bx = lerp(980, 1600, bt) + b.dx, by = 420 + b.dy - 40 * bt + 6 * Math.sin(t * 5 + b.dx);
+    const f = 9 * Math.sin(t * 22 + b.dx) * b.s, w = 15 * b.s;
+    b.node.setAttribute('d', `M${bx - w} ${by - f} Q${bx - w / 2} ${by - 6 * b.s} ${bx} ${by} Q${bx + w / 2} ${by - 6 * b.s} ${bx + w} ${by - f}`);
+    b.node.setAttribute('opacity', bt > 0 && bt < 1 ? 1 : 0);
+  }
+  curtL.setAttribute('transform', `translate(995 118) skewX(${(1.1 * Math.sin(t * 1.4)).toFixed(3)}) translate(-995 -118)`);
+  curtR.setAttribute('transform', `translate(995 118) skewX(${(1.1 * Math.sin(t * 1.4 + 1)).toFixed(3)}) translate(-995 -118)`);
+  for (const st of stars) st.node.setAttribute('transform', `rotate(${(4 * Math.sin(t * 1.9 + st.ph)).toFixed(2)} ${st.x} 0)`);
+
+  // dust motes drifting through the sunbeam
+  for (const m of motes) {
+    const v = (m.v + t * m.sp / 600) % 1;
+    const xa = lerp(1010, 300, v), xb = lerp(1530, 1210, v);
+    const px = lerp(xa, xb, m.u) + 8 * Math.sin(t * 0.9 + m.ph);
+    const py = lerp(lerp(300, 1080, v), lerp(560, 1080, v), m.u) - t * m.sp;
+    m.node.setAttribute('cx', px.toFixed(1));
+    m.node.setAttribute('cy', py.toFixed(1));
+    m.node.setAttribute('opacity', (0.35 + 0.45 * Math.abs(Math.sin(t * 1.7 + m.ph))).toFixed(2));
+  }
+}
+window.render = render;
+window.DUR = DUR;
+
+// preview loop when opened directly in a browser (render.js sets ?capture)
+if (!location.search.includes('capture')) {
+  const t0 = performance.now();
+  (function loop() { render(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); })();
+} else {
+  render(0);
+}
+</script>
+</body>
+</html>
