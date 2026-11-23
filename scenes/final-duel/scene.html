@@ -1,0 +1,527 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Final Duel</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  svg { display: block; width: 1920px; height: 1080px; }
+</style>
+</head>
+<body>
+<!--
+  "Final Duel" -- 5 s animated shot, flat paper-cutout style.
+  Original characters: the grown-up orphan boy (teal jacket) duels a
+  plum-coated rival with sabres in the treasure hold of a burning ship.
+  render(t) draws the frame at time t (0..5 s). Open in a browser to preview.
+-->
+<svg id="svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">
+<defs>
+  <linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#2f1a2e"/>
+    <stop offset="0.6" stop-color="#5a2b32"/>
+    <stop offset="1" stop-color="#8a3a2e"/>
+  </linearGradient>
+  <linearGradient id="floorG" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#a65a36"/>
+    <stop offset="1" stop-color="#5a2c22"/>
+  </linearGradient>
+  <radialGradient id="fireGlow" cx="960" cy="820" r="1000" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#ffb04a" stop-opacity="0.55"/>
+    <stop offset="0.5" stop-color="#ff7a3a" stop-opacity="0.2"/>
+    <stop offset="1" stop-color="#ff7a3a" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="lampGlow" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#ffe29a" stop-opacity="0.8"/>
+    <stop offset="1" stop-color="#ffb04a" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="goldGlow" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#ffe9a0" stop-opacity="0.9"/>
+    <stop offset="1" stop-color="#ffcf5a" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="vig" cx="960" cy="560" r="1100" gradientUnits="userSpaceOnUse">
+    <stop offset="0.5" stop-color="#1a0b16" stop-opacity="0"/>
+    <stop offset="1" stop-color="#1a0b16" stop-opacity="0.6"/>
+  </radialGradient>
+  <filter id="paper" x="-15%" y="-15%" width="130%" height="135%">
+    <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#1a0b16" flood-opacity="0.35"/>
+  </filter>
+  <filter id="charFx" x="-20%" y="-20%" width="140%" height="140%">
+    <feDropShadow dx="0" dy="0" stdDeviation="9" flood-color="#ff8a3a" flood-opacity="0.55"/>
+    <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#1a0b16" flood-opacity="0.35"/>
+  </filter>
+  <filter id="blur10" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="8" stitchTiles="stitch"/>
+    <feColorMatrix type="saturate" values="0"/>
+  </filter>
+</defs>
+<g id="camera"></g>
+<rect id="flash" width="1920" height="1080" fill="#fff6dc" opacity="0" style="mix-blend-mode:screen"/>
+</svg>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('svg');
+const cam = document.getElementById('camera');
+const flash = document.getElementById('flash');
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || cam).appendChild(e);
+  return e;
+}
+function g(attrs, parent) { return el('g', attrs || {}, parent); }
+let seed = 21;
+function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, u) => a + (b - a) * u;
+const smooth = (a, b, t) => { const u = clamp((t - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+const INK = '#2e1a26';
+
+function puff(parent, w, h, fill, op) {
+  const cg = g({ opacity: op }, parent);
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const u = (i + 0.5) / n, r = h * (0.5 + 0.5 * Math.sin(u * Math.PI)) * (0.85 + rnd() * 0.3);
+    el('circle', { cx: -w / 2 + u * w, cy: -r * 0.6, r, fill }, cg);
+  }
+  el('rect', { x: -w / 2 - h * 0.3, y: -h * 0.35, width: w + h * 0.6, height: h * 0.35 + 4, rx: h * 0.17, fill }, cg);
+  return cg;
+}
+function flamePath(w, h) {
+  return `M${-w} 0 C${-w} ${-h * 0.35} ${-w * 0.2} ${-h * 0.45} ${-w * 0.35} ${-h * 0.75} C${-w * 0.05} ${-h * 0.6} ${w * 0.1} ${-h * 0.85} 0 ${-h} ` +
+         `C${w * 0.5} ${-h * 0.7} ${w * 0.25} ${-h * 0.55} ${w * 0.55} ${-h * 0.45} C${w * 0.6} ${-h * 0.3} ${w} ${-h * 0.25} ${w} 0 Z`;
+}
+function flame(parent, x, y, w, h) {
+  const fg = g({}, parent);
+  const inner = g({}, fg);
+  el('path', { d: flamePath(w, h), fill: '#d9442f' }, inner);
+  el('path', { d: flamePath(w * 0.7, h * 0.72), fill: '#f2873a' }, inner);
+  el('path', { d: flamePath(w * 0.42, h * 0.45), fill: '#ffd166' }, inner);
+  return { node: fg, inner, x, y, ph: rnd() * 6.28, sp: 7 + rnd() * 5 };
+}
+
+// ------------------------------------------------------------------ ship hold
+el('rect', { width: 1920, height: 1080, fill: 'url(#wallG)' });
+const planks = g({ opacity: 0.35 });
+for (let y = 130; y < 800; y += 46) el('rect', { x: 0, y, width: 1920, height: 4, fill: '#1f0f1c' }, planks);
+// curved hull ribs
+const ribs = g({ filter: 'url(#paper)' });
+for (const x of [140, 520, 960, 1400, 1780]) {
+  const k = (x - 960) / 960;
+  el('path', { d: `M${x - 22} 800 C${x - 22 + k * 40} 500 ${x - 10 + k * 90} 260 ${x + k * 160} 90 L${x + 30 + k * 160} 90 C${x + 22 + k * 90} 260 ${x + 22 + k * 40} 500 ${x + 22} 800 Z`, fill: '#3e2128' }, ribs);
+}
+el('rect', { x: 0, y: 60, width: 1920, height: 54, fill: '#3a1d27', filter: 'url(#paper)' });
+el('rect', { x: 0, y: 108, width: 1920, height: 8, fill: '#26121d' });
+
+// smoke drifting under the ceiling
+const smokes = [];
+for (let i = 0; i < 7; i++) {
+  const sg = g({});
+  puff(sg, 260 + rnd() * 160, 70 + rnd() * 30, i % 2 ? '#4a3346' : '#57394e', 0.75);
+  smokes.push({ node: sg, x: -200 + i * 330, y: 150 + rnd() * 70, sp: 14 + rnd() * 12 });
+}
+
+// fire wall behind the duel
+const flames = [];
+const fireBack = g({ filter: 'url(#paper)' });
+for (let i = 0; i < 22; i++) {
+  const x = -40 + i * 92 + rnd() * 30;
+  flames.push(flame(fireBack, x, 800, 50 + rnd() * 30, 150 + rnd() * 150));
+}
+el('rect', { width: 1920, height: 1080, fill: 'url(#fireGlow)', style: 'mix-blend-mode:screen' });
+
+// falling burning beam (background), drops near the end
+const beamOuter = g({});
+const beamG = g({ filter: 'url(#paper)' }, beamOuter);
+el('rect', { x: -22, y: -380, width: 44, height: 380, rx: 6, fill: '#4a2620' }, beamG);
+el('rect', { x: -22, y: -380, width: 12, height: 380, fill: '#5e3226' }, beamG);
+const beamFlames = [flame(beamG, -6, -300, 36, 120), flame(beamG, 8, -180, 30, 100), flame(beamG, 0, -60, 34, 110)];
+
+// treasure piles (back)
+function pile(parent, cx, base, w, h) {
+  const pg = g({ filter: 'url(#paper)' }, parent);
+  el('ellipse', { cx, cy: base, rx: w * 0.6, ry: h * 0.5, fill: 'url(#goldGlow)', opacity: 0.6 }, pg);
+  el('path', { d: `M${cx - w / 2} ${base} C${cx - w / 3} ${base - h} ${cx + w / 3} ${base - h} ${cx + w / 2} ${base} Z`, fill: '#e3a83a' }, pg);
+  el('path', { d: `M${cx - w / 3} ${base - h * 0.3} C${cx - w / 5} ${base - h * 0.85} ${cx + w / 6} ${base - h * 0.85} ${cx + w / 4} ${base - h * 0.4} Z`, fill: '#f5c95a' }, pg);
+  for (let i = 0; i < w / 9; i++) {
+    const u = rnd(), x = cx - w / 2 + u * w;
+    const top = base - h * 0.75 * Math.sin(u * Math.PI);
+    el('ellipse', { cx: x, cy: top + rnd() * (base - top), rx: 9, ry: 4, fill: '#ffe08a', stroke: '#b9802a', 'stroke-width': 2 }, pg);
+  }
+  return pg;
+}
+const backStuff = g({});
+pile(backStuff, 250, 812, 420, 150);
+pile(backStuff, 1650, 812, 460, 170);
+// open chest on the right pile
+const chest = g({ filter: 'url(#paper)' }, backStuff);
+el('ellipse', { cx: 1690, cy: 700, rx: 120, ry: 60, fill: 'url(#goldGlow)' }, chest);
+el('path', { d: 'M1610 690 L1626 620 L1756 620 L1772 690 Z', fill: '#6a3524' }, chest);
+el('rect', { x: 1600, y: 690, width: 180, height: 96, rx: 8, fill: '#7a3e28' }, chest);
+el('path', { d: 'M1604 690 Q1690 664 1776 690 Z', fill: '#ffd76a' }, chest);
+el('rect', { x: 1600, y: 712, width: 180, height: 12, fill: '#d9a441' }, chest);
+el('rect', { x: 1680, y: 706, width: 20, height: 30, rx: 4, fill: '#d9a441' }, chest);
+// golden goblet on the left pile
+el('path', { d: 'M200 700 L240 700 Q238 734 222 740 L222 758 L236 764 L204 764 L218 758 L218 740 Q202 734 200 700 Z', fill: '#f5c95a', stroke: '#b9802a', 'stroke-width': 3, filter: 'url(#paper)' }, backStuff);
+
+// floor
+el('rect', { x: 0, y: 800, width: 1920, height: 280, fill: 'url(#floorG)' });
+const floorLines = g({ opacity: 0.4 });
+for (let i = -12; i < 30; i++) {
+  const x0 = 960 + i * 120, x1 = 960 + i * 120 * 1.8;
+  el('line', { x1: x0, y1: 800, x2: x1, y2: 1080, stroke: '#3a1a14', 'stroke-width': 4 }, floorLines);
+}
+el('rect', { x: 0, y: 798, width: 1920, height: 8, fill: '#3a1a14' });
+for (let i = 0; i < 26; i++)
+  el('ellipse', { cx: 80 + rnd() * 1760, cy: 830 + rnd() * 230, rx: 10, ry: 4.5, fill: '#ffd76a', stroke: '#a8742a', 'stroke-width': 2 });
+
+// swinging lantern between the duelists
+const lantern = g({});
+el('line', { x1: 960, y1: 114, x2: 960, y2: 236, stroke: '#2a1620', 'stroke-width': 4 }, lantern);
+el('circle', { cx: 960, cy: 268, r: 80, fill: 'url(#lampGlow)' }, lantern);
+el('rect', { x: 936, y: 236, width: 48, height: 64, rx: 10, fill: '#ffd98a', stroke: '#3a2228', 'stroke-width': 6 }, lantern);
+el('path', { d: 'M930 238 L990 238 L978 224 L942 224 Z M934 300 L986 300 L980 312 L940 312 Z', fill: '#3a2228' }, lantern);
+
+// ------------------------------------------------------------------ character rig
+// Local space faces right, feet at origin. The rival uses the same rig mirrored.
+function makeChar(o) {
+  const root = g({ filter: 'url(#charFx)' });
+  const backArm = g({}, root);
+  el('line', { x1: 0, y1: 0, x2: 62, y2: 0, stroke: o.sleeveD, 'stroke-width': 28, 'stroke-linecap': 'round' }, backArm);
+  el('circle', { cx: 70, cy: 0, r: 15, fill: o.skinD }, backArm);
+  const legB = el('path', { fill: 'none', stroke: o.pantsD, 'stroke-width': 36, 'stroke-linecap': 'round' }, root);
+  const legF = el('path', { fill: 'none', stroke: o.pants, 'stroke-width': 36, 'stroke-linecap': 'round' }, root);
+  const bootB = el('path', { fill: o.boot }, root);
+  const bootF = el('path', { fill: o.boot }, root);
+  const torso = g({}, root);
+  o.drawTorso(torso);
+  const head = g({}, torso);
+  el('ellipse', { cx: -92, cy: -84, rx: 16, ry: 24, fill: o.skinD }, head);
+  const HEAD = 'M-100 -170 Q-98 -228 0 -230 Q98 -228 100 -170 L104 -40 Q102 22 0 24 Q-102 22 -104 -40 Z';
+  el('path', { d: HEAD, fill: o.skin }, head);
+  el('path', { d: 'M-104 -60 L-104 -40 Q-102 22 0 24 Q-70 10 -88 -30 Q-98 -46 -104 -60 Z', fill: o.skinD, opacity: 0.55 }, head);
+  o.drawFaceBack(head);
+  // eyes
+  const eyes = [];
+  [[6, 22], [66, 18]].forEach(([ex, rx], i) => {
+    const id = o.id + 'eye' + i;
+    const cp = el('clipPath', { id }, head);
+    el('ellipse', { cx: ex, cy: -96, rx, ry: 26 }, cp);
+    el('ellipse', { cx: ex, cy: -96, rx, ry: 26, fill: '#fff' }, head);
+    const inner = g({ 'clip-path': `url(#${id})` }, head);
+    const pupil = g({}, inner);
+    el('circle', { cx: ex, cy: -96, r: 11, fill: o.iris }, pupil);
+    el('circle', { cx: ex, cy: -96, r: 6, fill: '#1c1016' }, pupil);
+    el('circle', { cx: ex + 3, cy: -100, r: 3, fill: '#fff' }, pupil);
+    const lid = g({}, inner);
+    const lidRect = el('rect', { x: ex - 40, y: -150, width: 80, height: 30, fill: o.skin }, lid);
+    const lidLine = el('line', { x1: ex - 40, x2: ex + 40, y1: -120, y2: -120, stroke: INK, 'stroke-width': 4.5, 'stroke-linecap': 'round' }, lid);
+    el('ellipse', { cx: ex, cy: -96, rx, ry: 26, fill: 'none', stroke: INK, 'stroke-width': 3 }, head);
+    eyes.push({ ex, pupil, lid, lidRect, lidLine, side: i ? -1 : 1 });
+  });
+  const browN = el('path', { fill: 'none', stroke: o.brow, 'stroke-width': 8, 'stroke-linecap': 'round' }, head);
+  const browF = el('path', { fill: 'none', stroke: o.brow, 'stroke-width': 7, 'stroke-linecap': 'round' }, head);
+  el('path', { d: 'M90 -78 Q112 -64 94 -50', fill: o.skin, stroke: o.skinD, 'stroke-width': 4, 'stroke-linecap': 'round' }, head);
+  const mouths = {};
+  for (const k in o.mouths) { mouths[k] = g({ display: 'none' }, head); mouths[k].innerHTML = o.mouths[k]; }
+  o.drawFaceFront(head);
+  // sword arm
+  const arm = g({}, torso);
+  el('line', { x1: 0, y1: 0, x2: 64, y2: 0, stroke: o.sleeve, 'stroke-width': 30, 'stroke-linecap': 'round' }, arm);
+  el('rect', { x: 52, y: -16, width: 12, height: 32, rx: 5, fill: o.cuff }, arm);
+  const sword = g({}, arm);
+  el('rect', { x: -22, y: -5, width: 34, height: 10, rx: 4, fill: '#5a3424' }, sword);
+  el('circle', { cx: -22, cy: 0, r: 7, fill: o.guard }, sword);
+  el('path', { d: 'M196 0 L14 -7 L14 7 Z', fill: '#e6e9f2', stroke: '#8f97ad', 'stroke-width': 2, 'stroke-linejoin': 'round' }, sword);
+  el('line', { x1: 20, y1: -2, x2: 170, y2: -1, stroke: '#ffffff', 'stroke-width': 2, opacity: 0.8 }, sword);
+  el('path', { d: 'M12 -22 Q22 0 12 22', fill: 'none', stroke: o.guard, 'stroke-width': 7, 'stroke-linecap': 'round' }, sword);
+  el('circle', { cx: 0, cy: 0, r: 16, fill: o.skin }, sword);
+  const mark = el('circle', { cx: 110, cy: 0, r: 0.1, fill: 'none' }, sword);
+  const tip = el('circle', { cx: 196, cy: 0, r: 0.1, fill: 'none' }, sword);
+  return { o, root, backArm, legB, legF, bootB, bootF, torso, head, eyes, browN, browF, mouths, arm, sword, mark, tip };
+}
+
+function boot(x, flip) {
+  return `M${x - 26} 0 Q${x - 28} -26 ${x - 4} -26 L${x + 8} -26 Q${x + 34} -18 ${x + 36} 0 Z`;
+}
+function poseChar(c, p, dir) {
+  const S = c.o.scale;
+  c.root.setAttribute('transform', `translate(${p.x.toFixed(1)} ${(860 + (p.bob || 0)).toFixed(1)}) scale(${dir * S} ${S})`);
+  const hipY = -120 + p.crouch, st = 1 + p.crouch / 90;
+  const bx = -58 * st, fx = 62 * st;
+  c.legB.setAttribute('d', `M-22 ${hipY} Q${bx - 18} ${hipY / 2} ${bx} -18`);
+  c.legF.setAttribute('d', `M24 ${hipY} Q${fx + 22} ${hipY / 2} ${fx} -18`);
+  c.bootB.setAttribute('d', boot(bx));
+  c.bootF.setAttribute('d', boot(fx));
+  c.torso.setAttribute('transform', `translate(0 ${p.crouch.toFixed(1)}) rotate(${p.lean.toFixed(2)} 0 -120)`);
+  c.backArm.setAttribute('transform', `translate(0 ${p.crouch.toFixed(1)}) rotate(${p.lean.toFixed(2)} 0 -120) translate(-34 -206) rotate(${p.backA.toFixed(2)})`);
+  c.head.setAttribute('transform', `translate(8 -238) rotate(${p.headTilt.toFixed(2)} 0 0)`);
+  c.arm.setAttribute('transform', `translate(36 -206) rotate(${p.armA.toFixed(2)})`);
+  c.sword.setAttribute('transform', `translate(70 0) rotate(${p.swA.toFixed(2)})`);
+  const e = c.o.expr[p.expr];
+  for (const k in c.mouths) c.mouths[k].setAttribute('display', k === e.mouth ? 'inline' : 'none');
+  for (const eye of c.eyes) {
+    const y = -122 + e.lid * 52;
+    eye.lidRect.setAttribute('height', (y + 150).toFixed(1));
+    eye.lidLine.setAttribute('y1', y.toFixed(1));
+    eye.lidLine.setAttribute('y2', y.toFixed(1));
+    eye.lid.setAttribute('transform', `rotate(${(eye.side * e.tilt).toFixed(1)} ${eye.ex} -96)`);
+    eye.pupil.setAttribute('transform', `translate(${eye.ex + 7 * (e.look || 1) - eye.ex} ${e.lookY || 0}) translate(${eye.ex} -96) scale(${e.pupil || 1}) translate(${-eye.ex} 96)`);
+  }
+  const a = e.brow, yo = e.browY || 0;
+  c.browN.setAttribute('d', `M-22 ${-134 + yo} Q2 ${-138 + yo} 30 ${-128 + yo + a * 12}`);
+  c.browF.setAttribute('d', `M44 ${-128 + yo + a * 12} Q66 ${-138 + yo} 90 ${-134 + yo}`);
+}
+
+// --- the hero: the orphan boy, grown up
+const hero = makeChar({
+  id: 'h', scale: 1, skin: '#f3c9a3', skinD: '#e0aa84', iris: '#7a5236', brow: '#5f3b25',
+  pants: '#6e5844', pantsD: '#5a4636', boot: '#4a2e2a', sleeve: '#3f8b8f', sleeveD: '#32737a', cuff: '#f3ead8', guard: '#c9a24a',
+  drawTorso(t) {
+    el('path', { d: 'M-52 -238 Q0 -250 52 -238 L60 -108 Q0 -98 -60 -108 Z', fill: '#f3ead8' }, t);
+    el('path', { d: 'M-52 -238 Q-20 -246 -12 -244 L-4 -104 Q-40 -100 -60 -108 Z', fill: '#3f8b8f' }, t);
+    el('path', { d: 'M52 -238 Q24 -246 18 -244 L14 -104 Q40 -100 60 -108 Z', fill: '#3f8b8f' }, t);
+    el('path', { d: 'M-40 -236 L40 -120 L28 -112 L-50 -226 Z', fill: '#8a5a36' }, t); // satchel strap
+    el('rect', { x: -62, y: -128, width: 124, height: 16, rx: 5, fill: '#5a3a2a' }, t);
+    el('rect', { x: -10, y: -130, width: 20, height: 20, rx: 3, fill: '#c9a24a' }, t);
+  },
+  drawFaceBack(h) {
+  },
+  drawFaceFront(h) {
+    el('path', { d: 'M-104 -118 Q-114 -228 -40 -240 Q12 -258 72 -240 Q118 -222 106 -118 Q100 -165 80 -180 Q40 -196 0 -190 Q-60 -192 -80 -170 Q-96 -150 -104 -118 Z', fill: '#7a4f33' }, h);
+    el('path', { d: 'M-30 -186 Q30 -224 92 -196 Q110 -182 112 -148 Q82 -180 40 -174 Q0 -176 -30 -186 Z', fill: '#5f3b25' }, h);
+    el('path', { d: 'M-8 -246 Q2 -274 28 -270 Q10 -262 10 -242 Z', fill: '#7a4f33' }, h);
+    el('path', { d: 'M-50 -226 Q0 -244 60 -232', fill: 'none', stroke: '#9a6a48', 'stroke-width': 6, 'stroke-linecap': 'round' }, h);
+    el('path', { d: 'M-80 -60 L-60 -56', stroke: '#c98a6a', 'stroke-width': 3, 'stroke-linecap': 'round' }, h); // small scar
+  },
+  mouths: {
+    det: '<path d="M30 -26 Q50 -30 72 -24" fill="none" stroke="#2e1a26" stroke-width="5" stroke-linecap="round"/>',
+    grit: '<rect x="26" y="-40" width="52" height="24" rx="10" fill="#fff" stroke="#2e1a26" stroke-width="4"/><path d="M27 -28 L77 -28 M40 -40 L40 -16 M52 -40 L52 -16 M64 -40 L64 -16" stroke="#2e1a26" stroke-width="2.5"/>',
+    smirk: '<path d="M30 -26 Q54 -22 74 -38" fill="none" stroke="#2e1a26" stroke-width="5" stroke-linecap="round"/>',
+  },
+  expr: {
+    det: { lid: 0.3, tilt: 14, brow: 1, mouth: 'det' },
+    grit: { lid: 0.38, tilt: 18, brow: 1.3, mouth: 'grit' },
+    smirk: { lid: 0.32, tilt: 8, brow: 0.6, mouth: 'smirk' },
+  },
+});
+
+// --- the rival: plum coat, slick hair, pointed beard
+const rival = makeChar({
+  id: 'v', scale: 1.04, skin: '#eec6a6', skinD: '#d9a888', iris: '#4a5a3a', brow: '#1e1418',
+  pants: '#3c3446', pantsD: '#2f2838', boot: '#1e1418', sleeve: '#6e3f78', sleeveD: '#583263', cuff: '#f4eee4', guard: '#e0c25a',
+  drawTorso(t) {
+    el('path', { d: 'M-54 -240 Q0 -252 54 -240 L64 -100 Q0 -88 -64 -100 Z', fill: '#6e3f78' }, t);
+    el('path', { d: 'M-20 -246 L0 -180 L20 -246 Z', fill: '#f4eee4' }, t);
+    el('path', { d: 'M-12 -240 Q0 -226 12 -240 L6 -206 Q0 -200 -6 -206 Z', fill: '#c0392b' }, t); // cravat
+    el('path', { d: 'M-22 -244 L0 -176 L-30 -150 L-44 -236 Z M22 -244 L0 -176 L30 -150 L44 -236 Z', fill: '#4e2a58' }, t);
+    for (const y of [-200, -170, -140]) for (const x of [-24, 24]) el('circle', { cx: x, cy: y, r: 5, fill: '#e0c25a' }, t);
+  },
+  drawFaceBack(h) {},
+  drawFaceFront(h) {
+    el('path', { d: 'M-106 -108 Q-114 -232 -16 -240 Q64 -246 102 -200 Q112 -180 108 -146 L70 -166 L48 -142 L24 -170 Q-40 -174 -80 -150 Q-100 -130 -106 -108 Z', fill: '#1e1418' }, h);
+    el('path', { d: 'M-60 -218 Q10 -238 80 -206', fill: 'none', stroke: '#5a4a6a', 'stroke-width': 7, 'stroke-linecap': 'round' }, h);
+    el('path', { d: 'M28 -44 Q50 -54 72 -44 Q84 -40 92 -50 Q84 -34 70 -38 Q50 -44 32 -38 Q22 -36 18 -46 Q22 -40 28 -44 Z', fill: '#1e1418' }, h); // moustache
+    el('path', { d: 'M30 10 Q48 54 66 12 Q48 20 30 10 Z', fill: '#1e1418' }, h); // pointed beard
+  },
+  mouths: {
+    sneer: '<path d="M30 -24 Q50 -22 70 -32" fill="none" stroke="#2e1a26" stroke-width="5" stroke-linecap="round"/>',
+    snarl: '<path d="M26 -32 Q50 -40 76 -32 Q70 -8 50 -8 Q32 -8 26 -32 Z" fill="#4a1e2a" stroke="#2e1a26" stroke-width="4" stroke-linejoin="round"/><path d="M30 -31 Q50 -38 72 -31 L70 -25 Q50 -31 32 -25 Z" fill="#fff"/>',
+    shock: '<ellipse cx="50" cy="-22" rx="10" ry="13" fill="#4a1e2a" stroke="#2e1a26" stroke-width="4"/>',
+  },
+  expr: {
+    sneer: { lid: 0.48, tilt: 8, brow: 0.8, mouth: 'sneer' },
+    snarl: { lid: 0.34, tilt: 20, brow: 1.4, mouth: 'snarl' },
+    shock: { lid: 0.02, tilt: 0, brow: -0.6, browY: -12, mouth: 'shock', pupil: 0.75 },
+  },
+});
+
+// foreground coin piles + effects layers (in front of the duel)
+const fx = g({});
+const fg = g({});
+pile(fg, 90, 1090, 360, 120);
+pile(fg, 1860, 1090, 380, 130);
+const embers = [];
+for (let i = 0; i < 70; i++) {
+  const e = el('circle', { r: (1.5 + rnd() * 3).toFixed(1), fill: rnd() < 0.5 ? '#ffd166' : '#ff8a3a' });
+  embers.push({ node: e, x: rnd() * 1920, y: rnd() * 1080, sp: 40 + rnd() * 90, ph: rnd() * 6.28, amp: 10 + rnd() * 30 });
+}
+el('rect', { width: 1920, height: 1080, fill: 'url(#vig)' });
+el('rect', { width: 1920, height: 1080, filter: 'url(#grain)', opacity: 0.06, style: 'mix-blend-mode:multiply' });
+
+// ------------------------------------------------------------------ choreography
+function track(keys) {
+  return (t) => {
+    if (t <= keys[0][0]) return keys[0][1];
+    for (let i = 0; i < keys.length - 1; i++) {
+      const [t0, v0] = keys[i], [t1, v1] = keys[i + 1];
+      if (t <= t1) { const u = (t - t0) / (t1 - t0); return lerp(v0, v1, u * u * (3 - 2 * u)); }
+    }
+    return keys[keys.length - 1][1];
+  };
+}
+function steps(list) { return (t) => { let v = list[0][1]; for (const [t0, k] of list) if (t >= t0) v = k; return v; }; }
+
+const H = {
+  x: track([[0, 700], [1.0, 700], [1.25, 670], [1.9, 660], [2.2, 680], [2.6, 800], [3.25, 790], [3.45, 640], [3.6, 650], [3.85, 720], [4.3, 730], [5, 735]]),
+  crouch: track([[0, 10], [1.1, 14], [1.3, 30], [1.9, 26], [2.2, 10], [2.6, 18], [3.25, 12], [3.45, 48], [3.6, 44], [3.85, 6], [4.3, 12], [5, 12]]),
+  lean: track([[0, 4], [1.15, -4], [1.3, -8], [1.9, -6], [2.2, 2], [2.45, -6], [2.6, 12], [3.0, 4], [3.3, 2], [3.45, -14], [3.6, -6], [3.85, 10], [4.3, 4], [5, 4]]),
+  armA: track([[0, 20], [0.85, 20], [1.1, -38], [1.9, -34], [2.2, 20], [2.4, -30], [2.6, 8], [3.0, 15], [3.3, 20], [3.45, 30], [3.6, 45], [3.85, -55], [4.3, 10], [5, 15]]),
+  swA: track([[0, -55], [0.85, -55], [1.1, 18], [1.9, 14], [2.2, -55], [2.4, -130], [2.6, -12], [3.0, -50], [3.3, -55], [3.6, 25], [3.85, 5], [4.3, -50], [5, -55]]),
+  backA: track([[0, -150], [1.15, -120], [1.9, -130], [2.6, -170], [3.45, -110], [3.85, -170], [5, -150]]),
+  headTilt: track([[0, 0], [1.15, 6], [1.9, 4], [2.6, -4], [3.45, 8], [3.85, -6], [4.3, 0], [5, 0]]),
+  expr: steps([[0, 'det'], [1.0, 'grit'], [2.1, 'det'], [2.4, 'grit'], [2.8, 'det'], [3.3, 'grit'], [4.2, 'smirk']]),
+};
+const V = {
+  x: track([[0, 1220], [0.7, 1225], [1.15, 1130], [1.9, 1120], [2.2, 1180], [2.6, 1180], [3.0, 1265], [3.2, 1250], [3.45, 1110], [3.6, 1110], [3.85, 1130], [4.3, 1250], [5, 1240]]),
+  crouch: track([[0, 10], [0.95, 4], [1.15, 24], [1.9, 20], [2.2, 10], [2.6, 16], [3.0, 20], [3.25, 0], [3.45, 34], [3.6, 34], [3.85, 24], [4.3, 14], [5, 10]]),
+  lean: track([[0, 2], [0.95, -8], [1.15, 14], [1.9, 12], [2.2, 0], [2.6, -6], [3.0, -12], [3.25, -6], [3.45, 22], [3.6, 20], [3.85, 2], [4.1, -16], [4.3, -8], [5, 2]]),
+  armA: track([[0, 20], [0.7, 20], [0.95, -110], [1.15, -20], [1.9, -24], [2.2, 20], [2.45, -10], [2.6, -15], [3.0, 0], [3.25, -110], [3.45, 30], [3.6, 30], [3.85, -30], [4.1, -100], [4.3, -20], [5, 15]]),
+  swA: track([[0, -55], [0.7, -55], [0.95, -60], [1.15, 30], [1.9, 26], [2.2, -55], [2.45, -70], [2.6, -75], [3.0, -60], [3.25, -60], [3.45, 15], [3.6, 15], [3.85, -40], [4.1, -50], [4.3, -50], [5, -55]]),
+  backA: track([[0, -150], [1.15, -110], [2.6, -160], [3.0, -170], [3.45, -100], [4.1, -175], [5, -150]]),
+  headTilt: track([[0, 0], [1.15, -4], [2.6, 6], [3.0, 8], [3.45, -6], [4.1, 10], [4.4, 0], [5, 0]]),
+  expr: steps([[0, 'sneer'], [0.7, 'snarl'], [2.0, 'sneer'], [2.5, 'shock'], [3.1, 'snarl'], [3.85, 'shock'], [4.4, 'snarl']]),
+};
+function poseAt(T, t, bobPh) {
+  const p = {};
+  for (const k in T) p[k] = T[k](t);
+  p.bob = Math.sin(t * 6 + bobPh) * 3;
+  return p;
+}
+function poseAll(t) {
+  poseChar(hero, poseAt(H, t, 0), 1);
+  poseChar(rival, poseAt(V, t, 1.5), -1);
+}
+
+// world-space position of a marker inside the camera group
+function camPoint(node) {
+  const m = cam.getCTM().inverse().multiply(node.getCTM());
+  const pt = svg.createSVGPoint();
+  pt.x = parseFloat(node.getAttribute('cx')); pt.y = 0;
+  return pt.matrixTransform(m);
+}
+
+const DUR = 5;
+const clashes = [1.15, 2.6, 3.85].map((tc, i) => ({ t: tc, big: i === 2 }));
+const splash = { t: 3.45 };
+cam.setAttribute('transform', '');
+for (const c of clashes) {
+  poseAll(c.t);
+  const a = camPoint(hero.mark), b = camPoint(rival.mark);
+  c.x = (a.x + b.x) / 2; c.y = (a.y + b.y) / 2;
+}
+poseAll(splash.t);
+{ const p = camPoint(rival.tip); splash.x = p.x; splash.y = Math.min(p.y, 880); }
+
+// spark + coin particles (pre-seeded)
+for (const c of clashes) {
+  c.g = g({ style: 'mix-blend-mode:screen' }, fx);
+  c.burst = el('path', { d: (() => { let d = ''; for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8, r = i % 2 ? 22 : 70; d += (i ? 'L' : 'M') + (Math.cos(a) * r).toFixed(1) + ' ' + (Math.sin(a) * r).toFixed(1); } return d + 'Z'; })(), fill: '#fff4c8' }, c.g);
+  c.glow = el('circle', { r: 90, fill: '#ffcf6a', filter: 'url(#blur10)' }, c.g);
+  c.sparks = [];
+  for (let i = 0; i < (c.big ? 26 : 18); i++) {
+    const a = rnd() * Math.PI * 2, sp = 300 + rnd() * 500;
+    c.sparks.push({ node: el('line', { stroke: rnd() < 0.5 ? '#fff1b0' : '#ffb84a', 'stroke-width': 4, 'stroke-linecap': 'round' }, c.g), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 150 });
+  }
+}
+splash.coins = [];
+for (let i = 0; i < 16; i++) {
+  const a = -Math.PI / 2 + (rnd() - 0.5) * 2.2, sp = 380 + rnd() * 420;
+  splash.coins.push({ node: el('ellipse', { rx: 11, ry: 11, fill: '#ffd76a', stroke: '#a8742a', 'stroke-width': 3 }, fx), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, spin: 10 + rnd() * 20, land: 868 + rnd() * 70 });
+}
+const beamBurst = [];
+for (let i = 0; i < 24; i++) {
+  const a = -Math.PI / 2 + (rnd() - 0.5) * 2.6, sp = 200 + rnd() * 400;
+  beamBurst.push({ node: el('circle', { r: 2 + rnd() * 3, fill: rnd() < 0.5 ? '#ffd166' : '#ff8a3a' }, fx), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp });
+}
+
+function render(t) {
+  poseAll(t);
+
+  // camera: slow push-in + shake on impacts
+  let shake = 0;
+  for (const c of clashes) if (t >= c.t) shake += (c.big ? 16 : 10) * Math.exp(-(t - c.t) * 12);
+  if (t >= splash.t) shake += 6 * Math.exp(-(t - splash.t) * 12);
+  if (t >= 4.8) shake += 5 * Math.exp(-(t - 4.8) * 10);
+  const s = 1 + 0.08 * smooth(0, DUR, t);
+  const sx = shake * Math.sin(t * 90), sy = shake * Math.cos(t * 77);
+  cam.setAttribute('transform', `translate(${sx.toFixed(2)} ${sy.toFixed(2)}) translate(960 620) scale(${s.toFixed(4)}) translate(-960 -620)`);
+
+  // clash flashes + sparks
+  let fl = 0;
+  for (const c of clashes) {
+    const dt = t - c.t;
+    const on = dt >= 0 && dt < 0.6;
+    c.g.setAttribute('display', on ? 'inline' : 'none');
+    if (!on) continue;
+    const k = clamp(1 - dt / 0.16, 0, 1);
+    c.burst.setAttribute('transform', `translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${dt * 200}) scale(${(0.6 + dt * 5) * (c.big ? 1.4 : 1)})`);
+    c.burst.setAttribute('opacity', k.toFixed(2));
+    c.glow.setAttribute('cx', c.x); c.glow.setAttribute('cy', c.y);
+    c.glow.setAttribute('opacity', (clamp(1 - dt / 0.35, 0, 1) * 0.8).toFixed(2));
+    for (const sp of c.sparks) {
+      const x = c.x + sp.vx * dt, y = c.y + sp.vy * dt + 900 * dt * dt;
+      const x0 = c.x + sp.vx * Math.max(0, dt - 0.04), y0 = c.y + sp.vy * Math.max(0, dt - 0.04) + 900 * Math.pow(Math.max(0, dt - 0.04), 2);
+      sp.node.setAttribute('x1', x0.toFixed(1)); sp.node.setAttribute('y1', y0.toFixed(1));
+      sp.node.setAttribute('x2', x.toFixed(1)); sp.node.setAttribute('y2', y.toFixed(1));
+      sp.node.setAttribute('opacity', clamp(1 - dt / 0.55, 0, 1).toFixed(2));
+    }
+    fl = Math.max(fl, (c.big ? 0.24 : 0.16) * clamp(1 - dt / 0.12, 0, 1));
+  }
+  flash.setAttribute('opacity', fl.toFixed(3));
+
+  // coins thrown up where the heavy chop hits the deck
+  const ds = t - splash.t;
+  for (const c of splash.coins) {
+    const on = ds >= 0 && ds < 1.2;
+    c.node.setAttribute('display', on ? 'inline' : 'none');
+    if (!on) continue;
+    const y = Math.min(splash.y + c.vy * ds + 1400 * ds * ds, c.land);
+    c.node.setAttribute('cx', (splash.x + c.vx * Math.min(ds, 0.55)).toFixed(1));
+    c.node.setAttribute('cy', y.toFixed(1));
+    c.node.setAttribute('rx', (11 * Math.abs(Math.cos(ds * c.spin))).toFixed(2));
+  }
+
+  // burning beam falls in the background
+  const bf = smooth(4.3, 4.8, t);
+  const bfall = bf * bf;
+  beamOuter.setAttribute('transform', `translate(${lerp(1700, 1760, bfall)} ${lerp(-90, 806, bfall)}) rotate(${lerp(-18, -74, bfall)})`);
+  beamOuter.setAttribute('display', t > 4.25 ? 'inline' : 'none');
+  const db = t - 4.8;
+  for (const e of beamBurst) {
+    const on = db >= 0 && db < 0.7;
+    e.node.setAttribute('display', on ? 'inline' : 'none');
+    if (!on) continue;
+    e.node.setAttribute('cx', (1560 + e.vx * db).toFixed(1));
+    e.node.setAttribute('cy', (790 + e.vy * db + 600 * db * db).toFixed(1));
+    e.node.setAttribute('opacity', (1 - db / 0.7).toFixed(2));
+  }
+
+  // fire, smoke, embers, lantern
+  for (const f of [...flames, ...beamFlames]) {
+    const sy = 1 + 0.14 * Math.sin(t * f.sp + f.ph) + 0.06 * Math.sin(t * f.sp * 2.3 + f.ph);
+    f.node.setAttribute('transform', `translate(${f.x} ${f.y}) skewX(${(5 * Math.sin(t * 3 + f.ph)).toFixed(2)}) scale(${(1 - 0.05 * Math.sin(t * f.sp + f.ph)).toFixed(3)} ${sy.toFixed(3)})`);
+  }
+  for (const sm of smokes) sm.node.setAttribute('transform', `translate(${(sm.x + sm.sp * t).toFixed(1)} ${sm.y})`);
+  for (const e of embers) {
+    const y = ((e.y - e.sp * t) % 1080 + 1080) % 1080;
+    e.node.setAttribute('cx', (e.x + e.amp * Math.sin(t * 2 + e.ph)).toFixed(1));
+    e.node.setAttribute('cy', y.toFixed(1));
+    e.node.setAttribute('opacity', (0.5 + 0.5 * Math.sin(t * 5 + e.ph)).toFixed(2));
+  }
+  lantern.setAttribute('transform', `rotate(${(6 * Math.sin(t * 2.2)).toFixed(2)} 960 114)`);
+}
+window.render = render;
+window.DUR = DUR;
+
+if (!location.search.includes('capture')) {
+  const t0 = performance.now();
+  (function loop() { render(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); })();
+} else {
+  render(0);
+}
+</script>
+</body>
+</html>
