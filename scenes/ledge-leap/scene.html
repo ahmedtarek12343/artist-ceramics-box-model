@@ -1,0 +1,419 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ledge Leap</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  svg { display: block; width: 1920px; height: 1080px; }
+</style>
+</head>
+<body>
+<!--
+  "Ledge Leap" -- 5 s animated shot in a bold-ink-outline cartoon style.
+  Original character: the grown-up orphan adventurer (teal jacket, cream shirt,
+  satchel, olive trousers, cowlick, small scar). He sprints across jungle ruins,
+  leaps a chasm, catches a ledge, smirks at the camera -- then the ledge crumbles.
+  render(t) draws the frame at time t (0..5 s). Open in a browser to preview.
+-->
+<svg id="svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#9fd2cf"/>
+    <stop offset="0.6" stop-color="#d9e9c9"/>
+    <stop offset="1" stop-color="#f4e6bf"/>
+  </linearGradient>
+  <linearGradient id="chasm" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#4c5d50"/>
+    <stop offset="1" stop-color="#1c2420"/>
+  </linearGradient>
+  <linearGradient id="fall" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#cfeef0"/>
+    <stop offset="0.5" stop-color="#ffffff"/>
+    <stop offset="1" stop-color="#cfeef0"/>
+  </linearGradient>
+  <radialGradient id="vig" cx="960" cy="540" r="1150" gradientUnits="userSpaceOnUse">
+    <stop offset="0.55" stop-color="#2a1d14" stop-opacity="0"/>
+    <stop offset="1" stop-color="#2a1d14" stop-opacity="0.45"/>
+  </radialGradient>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="4" stitchTiles="stitch"/>
+    <feColorMatrix type="saturate" values="0"/>
+  </filter>
+  <clipPath id="fallClip"><rect x="1455" y="250" width="70" height="420"/></clipPath>
+</defs>
+<g id="camera"></g>
+</svg>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const cam = document.getElementById('camera');
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || cam).appendChild(e);
+  return e;
+}
+function g(attrs, parent) { return el('g', attrs || {}, parent); }
+let seed = 31;
+function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, u) => a + (b - a) * u;
+const smooth = (a, b, t) => { const u = clamp((t - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+const rad = (d) => d * Math.PI / 180;
+const INK = '#231a16';
+const ink = (w) => ({ stroke: INK, 'stroke-width': w, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+const A = (o, w) => Object.assign(o, ink(w || 4));
+
+// ------------------------------------------------------------------ backdrop
+el('rect', { width: 1920, height: 1080, fill: 'url(#sky)' });
+el('circle', { cx: 420, cy: 250, r: 70, fill: '#fff4cf', opacity: 0.9 });
+// far mountains
+el('path', A({ d: 'M-20 640 L160 380 L300 500 L470 300 L640 520 L820 360 L1000 560 L1160 330 L1330 480 L1460 260 L1560 260 L1720 420 L1940 300 L1940 700 L-20 700 Z', fill: '#9cc2b0' }, 3));
+el('path', A({ d: 'M440 340 L470 300 L500 345 L484 336 L470 350 L456 336 Z M1140 360 L1160 330 L1182 362 L1168 356 L1160 366 L1150 356 Z', fill: '#f2f2ea' }, 3));
+// waterfall
+el('rect', A({ x: 1460, y: 258, width: 60, height: 410, fill: 'url(#fall)' }, 3));
+const fallLines = g({ 'clip-path': 'url(#fallClip)' });
+const fallStreaks = [];
+for (let i = 0; i < 14; i++) {
+  const x = 1466 + (i % 5) * 12;
+  fallStreaks.push({ node: el('line', { x1: x, x2: x, stroke: '#8fc6cf', 'stroke-width': 3, 'stroke-linecap': 'round' }, fallLines), y: rnd() * 420, len: 30 + rnd() * 40 });
+}
+// distant stepped temple
+el('path', A({ d: 'M180 640 L180 600 L210 600 L210 565 L240 565 L240 530 L300 530 L300 565 L330 565 L330 600 L360 600 L360 640 Z', fill: '#8fb19f' }, 3));
+el('rect', A({ x: 258, y: 545, width: 24, height: 24, fill: '#6f9180' }, 3));
+// jungle canopy
+function bushRow(y, col, n, h, sw) {
+  let d = `M-40 ${y + 200}`;
+  let x = -40;
+  d += ` L-40 ${y}`;
+  while (x < 1960) { const w = 60 + rnd() * 70; d += ` Q${x + w / 2} ${y - h * (0.6 + rnd() * 0.6)} ${x + w} ${y}`; x += w; }
+  d += ` L1960 ${y + 200} Z`;
+  el('path', A({ d, fill: col }, sw));
+}
+bushRow(660, '#7fae72', 0, 70, 3);
+bushRow(720, '#5f9460', 0, 80, 4);
+// birds
+const birds = [];
+for (let i = 0; i < 4; i++) birds.push({ node: el('path', { fill: 'none', ...ink(3) }), x: 600 + i * 70, y: 300 + (i % 2) * 30, ph: i });
+
+// chasm
+el('rect', { x: 820, y: 560, width: 400, height: 540, fill: 'url(#chasm)' });
+const mists = [];
+for (let i = 0; i < 6; i++) {
+  const m = g({ opacity: 0.55 });
+  for (let k = 0; k < 4; k++) el('circle', { cx: k * 34, cy: -((k % 2) * 14), r: 30, fill: '#cfe0d2' }, m);
+  mists.push({ node: m, x: 800 + i * 70, y: 960 + (i % 3) * 40, sp: 10 + rnd() * 14 });
+}
+
+// left cliff
+el('path', A({ d: 'M-60 780 L842 780 Q860 790 852 830 L870 880 L846 960 L866 1100 L-60 1100 Z', fill: '#b9a27f' }, 5));
+for (const [x, y, w] of [[90, 860, 140], [320, 900, 180], [560, 850, 150], [200, 980, 160], [480, 1000, 200], [720, 940, 100]])
+  el('path', { d: `M${x} ${y} l${w * 0.4} -8 l${w * 0.6} 6`, fill: 'none', ...ink(3), opacity: 0.7 });
+el('path', A({ d: 'M-60 770 Q100 756 220 772 Q360 760 500 774 Q640 758 860 776 L862 792 L-60 794 Z', fill: '#7cb05e' }, 4));
+// right ruin wall with ledge
+el('path', A({ d: 'M1186 552 L1940 552 L1940 1100 L1176 1100 L1190 920 L1178 780 L1190 640 Z', fill: '#a8a08e' }, 5));
+for (let row = 0; row < 7; row++) {
+  const y = 552 + row * 78;
+  el('line', { x1: 1186, y1: y, x2: 1940, y2: y, ...ink(3), opacity: 0.6 });
+  for (let x = 1186 + (row % 2) * 70; x < 1940; x += 140) el('line', { x1: x, y1: y, x2: x, y2: y + 78, ...ink(3), opacity: 0.6 });
+}
+el('path', { d: 'M1300 700 l20 30 l-8 26 l22 22 M1620 860 l-16 30 l10 22', fill: 'none', ...ink(3), opacity: 0.7 });
+// carved spiral glyph (generic decoration)
+el('path', { d: 'M1520 680 m-30 0 a30 30 0 1 0 60 0 a22 22 0 1 0 -44 0 a14 14 0 1 0 28 0 a6 6 0 1 0 -12 0', fill: 'none', ...ink(4), opacity: 0.8 });
+// ledge slab + moss
+const ledgeSlab = el('path', A({ d: 'M1166 530 L1940 530 L1940 560 L1170 560 Q1160 546 1166 530 Z', fill: '#c2b9a4' }, 5));
+el('path', A({ d: 'M1220 532 Q1300 512 1400 530 Q1500 514 1640 528 Q1780 512 1940 528 L1940 536 L1220 538 Z', fill: '#7cb05e' }, 4));
+// crumbling chunk at the lip (breaks off near the end)
+const chunk = el('path', A({ d: 'M-14 -12 L14 -14 L16 10 L-10 14 Z', fill: '#b5ab95' }, 4));
+// vines
+const vines = [];
+for (const [x, len] of [[1260, 260], [1430, 340], [1700, 220], [1850, 300]]) {
+  const vg = g({});
+  el('path', { d: `M0 0 Q12 ${len / 2} 0 ${len}`, fill: 'none', stroke: INK, 'stroke-width': 9, 'stroke-linecap': 'round' }, vg);
+  el('path', { d: `M0 0 Q12 ${len / 2} 0 ${len}`, fill: 'none', stroke: '#5f9460', 'stroke-width': 4, 'stroke-linecap': 'round' }, vg);
+  for (let y = 40; y < len; y += 46) el('path', A({ d: `M4 ${y} q16 -12 26 2 q-14 10 -26 -2 Z`, fill: '#7cb05e' }, 3), vg);
+  vines.push({ node: vg, x, ph: rnd() * 6 });
+}
+
+// ------------------------------------------------------------------ the adventurer (original character)
+const C = { skin: '#f1c49c', skinD: '#d9a27c', hair: '#6b4429', hairL: '#8c5c3a', jacket: '#3f8b8f', jacketD: '#2f6f73',
+            shirt: '#f3ead8', strap: '#8a5a36', pants: '#6b7046', pantsD: '#545839', boot: '#4a2e22', bootD: '#3a231a' };
+const S = 0.95;
+const L = { thigh: 64, shin: 62, upper: 50, fore: 46, shoulder: 92 };
+const hero = g({});
+function limb(color, w) {
+  const lg = g({}, hero);
+  const o = el('path', { fill: 'none', stroke: INK, 'stroke-width': w + 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, lg);
+  const c = el('path', { fill: 'none', stroke: color, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, lg);
+  return { g: lg, o, c };
+}
+const armF = limb(C.jacketD, 16);
+const handF = el('circle', A({ r: 11, fill: C.skinD }, 4), hero);
+const legF = limb(C.pantsD, 20);
+const bootF = el('path', A({ d: 'M-12 -10 Q-14 8 -2 9 L24 9 Q28 0 16 -8 Z', fill: C.bootD }, 4), hero);
+const torso = g({}, hero);
+el('path', A({ d: 'M-40 -40 h26 v30 h-26 Z', fill: C.strap }, 4), torso);                 // satchel
+el('path', A({ d: 'M-40 -30 h26 v-10 h-26 Z', fill: '#6f4628' }, 3), torso);
+el('path', A({ d: 'M-28 2 L-31 -98 Q0 -112 31 -98 L29 2 Z', fill: C.jacket }, 5), torso);
+el('path', A({ d: 'M14 -104 L31 -98 L29 2 L17 2 Z', fill: C.shirt }, 4), torso);
+el('path', { d: 'M-22 -104 L22 -18', stroke: INK, 'stroke-width': 13, 'stroke-linecap': 'round' }, torso);
+el('path', { d: 'M-22 -104 L22 -18', stroke: C.strap, 'stroke-width': 7, 'stroke-linecap': 'round' }, torso);
+el('rect', A({ x: -30, y: -16, width: 60, height: 12, rx: 3, fill: '#4a3022' }, 3), torso);
+el('rect', A({ x: 14, y: -18, width: 12, height: 16, rx: 2, fill: '#d9b24a' }, 3), torso);
+// head
+const head = g({}, hero);
+const earN = el('ellipse', A({ rx: 9, ry: 13, fill: C.skinD }, 4), head);
+el('ellipse', A({ cx: 0, cy: 0, rx: 50, ry: 54, fill: C.skin }, 5), head);
+const nose = el('path', A({ fill: C.skin }, 4), head);
+const scar = el('path', { fill: 'none', stroke: '#b87a5c', 'stroke-width': 3, 'stroke-linecap': 'round' }, head);
+const eyes = [0, 1].map(() => {
+  const eg = g({}, head);
+  return { g: eg, white: el('ellipse', A({ fill: '#fff' }, 3.5), eg), pupil: el('circle', { r: 5.5, fill: INK }, eg), glint: el('circle', { r: 1.8, fill: '#fff' }, eg) };
+});
+const brows = [0, 1].map(() => el('path', { fill: 'none', stroke: INK, 'stroke-width': 7, 'stroke-linecap': 'round' }, head));
+const mouth = g({}, head);
+const hair = g({}, head);
+el('path', A({ d: 'M-54 4 Q-64 -60 -8 -68 Q44 -74 58 -30 Q60 -14 56 -2 Q48 -24 32 -30 L36 -14 Q20 -30 2 -32 L4 -16 Q-14 -30 -30 -24 Q-44 -16 -48 10 Z', fill: C.hair }, 5), hair);
+el('path', A({ d: 'M-8 -66 Q-2 -92 20 -90 Q6 -82 8 -66 Z', fill: C.hair }, 4), hair);
+el('path', { d: 'M-30 -56 Q4 -68 36 -54', fill: 'none', stroke: C.hairL, 'stroke-width': 5, 'stroke-linecap': 'round' }, hair);
+const sweat = el('path', A({ d: 'M0 -14 Q9 0 0 6 Q-9 0 0 -14 Z', fill: '#bfe6f2' }, 3), head);
+const legN = limb(C.pants, 20);
+const bootN = el('path', A({ d: 'M-12 -10 Q-14 8 -2 9 L24 9 Q28 0 16 -8 Z', fill: C.boot }, 4), hero);
+const armN = limb(C.jacket, 16);
+const handN = el('circle', A({ r: 11, fill: C.skin }, 4), hero);
+
+const MOUTHS = {
+  det: `<path d="M-10 0 Q0 -2 10 1" fill="none" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`,
+  effort: `<rect x="-12" y="-7" width="24" height="14" rx="5" fill="#fff" stroke="${INK}" stroke-width="3.5"/><path d="M-11 0 H11 M-4 -7 V7 M4 -7 V7" stroke="${INK}" stroke-width="2"/>`,
+  shout: `<ellipse cx="0" cy="0" rx="8" ry="10" fill="#5a2a2a" stroke="${INK}" stroke-width="3.5"/>`,
+  smirk: `<path d="M-11 1 Q2 5 13 -7" fill="none" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`,
+  uhoh: `<path d="M-11 2 q5.5 -6 11 0 q5.5 6 11 0" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round" transform="translate(-0 0)"/>`,
+};
+
+function setLimb(l, x0, y0, a1, len1, a2, len2) {
+  const x1 = x0 + Math.sin(rad(a1)) * len1, y1 = y0 + Math.cos(rad(a1)) * len1;
+  const x2 = x1 + Math.sin(rad(a2)) * len2, y2 = y1 + Math.cos(rad(a2)) * len2;
+  const d = `M${x0.toFixed(1)} ${y0.toFixed(1)} L${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}`;
+  l.o.setAttribute('d', d); l.c.setAttribute('d', d);
+  return [x2, y2];
+}
+// pose: { x, y (hip, world), lean, legN:[thigh,shin], legF, armN:[upper,fore], armF, f (facing 1=right, 0=camera), expr, look:[x,y], brow:[a, raiseFar], sweat }
+function poseHero(p) {
+  hero.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${S})`);
+  if (p.headTop) { if (head.nextSibling !== handF) { hero.appendChild(head); hero.appendChild(handF); hero.appendChild(handN); } }
+  else if (head.nextSibling !== legN.g) { hero.insertBefore(head, legN.g); hero.insertBefore(handF, legF.g); hero.appendChild(handN); }
+  const up = [Math.sin(rad(p.lean)), -Math.cos(rad(p.lean))];
+  const sh = [up[0] * L.shoulder, up[1] * L.shoulder];
+  torso.setAttribute('transform', `rotate(${p.lean.toFixed(2)})`);
+  const hc = [up[0] * 158, up[1] * 158];
+  head.setAttribute('transform', `translate(${hc[0].toFixed(1)} ${hc[1].toFixed(1)}) rotate(${(p.lean * 0.4 + (p.tilt || 0)).toFixed(2)})`);
+  let e = setLimb(legF, -4, -6, p.legF[0], L.thigh, p.legF[1], L.shin);
+  bootF.setAttribute('transform', `translate(${e[0].toFixed(1)} ${e[1].toFixed(1)}) rotate(${(-p.legF[1] * 0.5).toFixed(1)})`);
+  e = setLimb(legN, 4, -6, p.legN[0], L.thigh, p.legN[1], L.shin);
+  bootN.setAttribute('transform', `translate(${e[0].toFixed(1)} ${e[1].toFixed(1)}) rotate(${(-p.legN[1] * 0.5).toFixed(1)})`);
+  e = setLimb(armF, sh[0] + 6, sh[1], p.armF[0], L.upper, p.armF[1], L.fore);
+  handF.setAttribute('cx', e[0].toFixed(1)); handF.setAttribute('cy', e[1].toFixed(1));
+  e = setLimb(armN, sh[0] - 4, sh[1], p.armN[0], L.upper, p.armN[1], L.fore);
+  handN.setAttribute('cx', e[0].toFixed(1)); handN.setAttribute('cy', e[1].toFixed(1));
+
+  // face, turned by f (1 = profile-ish to the right, 0 = toward camera)
+  const f = p.f, fx = 22 * f;
+  earN.setAttribute('cx', (-36 * f - 2).toFixed(1)); earN.setAttribute('cy', 6);
+  earN.setAttribute('display', f > 0.25 ? 'inline' : 'none');
+  nose.setAttribute('d', f > 0.45 ? `M${44 + fx * 0.1} -2 Q${58 + fx * 0.1} 8 ${44 + fx * 0.1} 16` : 'M0 6 Q5 12 0 16');
+  scar.setAttribute('d', `M${-30 + fx * 0.6} 14 l14 3`);
+  const ex = [-14 + fx, 18 + fx];
+  const look = p.look || [1, 0];
+  eyes.forEach((ey, i) => {
+    const rx = i ? 11 - 3 * f : 11, ry = 14;
+    ey.white.setAttribute('cx', ex[i]); ey.white.setAttribute('cy', -6);
+    ey.white.setAttribute('rx', rx); ey.white.setAttribute('ry', ry);
+    const px = ex[i] + look[0] * (rx - 6), py = -6 + look[1] * 7;
+    ey.pupil.setAttribute('cx', px.toFixed(1)); ey.pupil.setAttribute('cy', py.toFixed(1));
+    ey.glint.setAttribute('cx', (px + 2).toFixed(1)); ey.glint.setAttribute('cy', (py - 2).toFixed(1));
+  });
+  const [a, raiseFar] = p.brow || [1, 0];
+  brows[0].setAttribute('d', `M${ex[0] - 12} -26 L${ex[0] + 11} ${-26 + a * 7}`);
+  brows[1].setAttribute('d', `M${ex[1] - 10} ${-26 + a * 7 - raiseFar} L${ex[1] + 10} ${-26 - raiseFar * 1.4}`);
+  mouth.innerHTML = MOUTHS[p.expr];
+  mouth.setAttribute('transform', `translate(${(4 + 22 * f).toFixed(1)} 26)`);
+  hair.setAttribute('transform', `translate(${(f * 4).toFixed(1)} 0)`);
+  sweat.setAttribute('display', p.sweat ? 'inline' : 'none');
+  if (p.sweat) sweat.setAttribute('transform', `translate(-44 ${(-30 + p.sweat * 14).toFixed(1)}) scale(${clamp(p.sweat * 3, 0, 1).toFixed(2)})`);
+}
+
+// ------------------------------------------------------------------ effects layers
+const fx = g({});
+const fgPlants = g({});
+const leafShapes = [];
+for (const [x, y, r, s] of [[60, 1100, -30, 1.4], [170, 1110, 10, 1.1], [1880, 1110, 25, 1.3]]) {
+  const lg = g({}, fgPlants);
+  el('path', A({ d: 'M0 0 Q-60 -120 0 -240 Q60 -120 0 0 Z', fill: '#4f8a4e' }, 5), lg);
+  el('path', { d: 'M0 -10 L0 -220', fill: 'none', ...ink(3) }, lg);
+  leafShapes.push({ node: lg, x, y, r, s });
+}
+el('rect', { width: 1920, height: 1080, fill: 'url(#vig)' });
+el('rect', { width: 1920, height: 1080, filter: 'url(#grain)', opacity: 0.08, style: 'mix-blend-mode:multiply' });
+
+// ------------------------------------------------------------------ motion
+const DUR = 5, T_JUMP = 1.6, T_GRAB = 2.3, RUN_HZ = 2.4;
+const GROUND = 780;
+const HAND = [1190, 540];
+function runPose(t) {
+  const p = t * Math.PI * 2 * RUN_HZ;
+  const x = lerp(-140, 800, t / T_JUMP);
+  const legA = (ph) => {
+    const th = 34 * Math.sin(ph);
+    const bend = 12 + 70 * Math.max(0, Math.sin(ph - 1.4));
+    return [th, th - bend];
+  };
+  return {
+    x, y: GROUND - 118 - 9 * Math.abs(Math.cos(p)), lean: 14,
+    legN: legA(p), legF: legA(p + Math.PI),
+    armN: [-38 * Math.sin(p) + 5, -38 * Math.sin(p) + 85], armF: [38 * Math.sin(p) + 5, 38 * Math.sin(p) + 85],
+    f: 1, expr: 'det', look: [1, 0], brow: [1, 0],
+  };
+}
+const ARM_TILT = 55;
+function armAngle(aDeg) { return 180 - ARM_TILT + aDeg * 0.35; }
+function hangGeom(aDeg) {
+  // hands fixed on the ledge; aDeg < 0 swings the hips away from the wall
+  const th = rad(armAngle(aDeg)), a = rad(aDeg), arm = (L.upper + L.fore) * S, tor = L.shoulder * S;
+  const sh = [HAND[0] - Math.sin(th) * arm + 4 * S, HAND[1] - Math.cos(th) * arm];
+  return { x: sh[0] + Math.sin(a) * tor, y: sh[1] + Math.cos(a) * tor };
+}
+const A0 = -22;
+const H0 = hangGeom(A0);
+function swingAngle(t) {
+  const d = t - T_GRAB;
+  return A0 * Math.exp(-2.2 * d) * Math.cos(2 * Math.PI * d / 1.0);
+}
+function pose(t) {
+  if (t < T_JUMP) return runPose(t);
+  if (t < T_GRAB) {
+    const u = (t - T_JUMP) / (T_GRAB - T_JUMP);
+    const r0 = runPose(T_JUMP);
+    const x = lerp(r0.x, H0.x, u), y = lerp(r0.y, H0.y, u) - 4 * 150 * u * (1 - u);
+    const reach = smooth(0.1, 0.85, u);
+    return {
+      x, y, lean: lerp(14, -A0, u),
+      legN: [lerp(30, 70, smooth(0, 0.4, u)) - 40 * smooth(0.6, 1, u), lerp(-20, -50, smooth(0, 0.4, u)) - 20 * smooth(0.6, 1, u)],
+      legF: [lerp(-30, -20, u), lerp(-60, -70, u)],
+      armN: [lerp(-20, armAngle(A0), reach), lerp(60, armAngle(A0), reach)],
+      armF: [lerp(30, armAngle(A0) + 6, reach), lerp(90, armAngle(A0) + 6, reach)],
+      headTop: u > 0.8,
+      f: 1, expr: u < 0.75 ? 'shout' : 'effort', look: [1, -0.6], brow: [1.2, 0],
+    };
+  }
+  // hanging
+  const a = swingAngle(t), hp = hangGeom(a);
+  const kick = Math.sin((t - T_GRAB) * 14) * 18 * Math.exp(-(t - T_GRAB) * 2.5);
+  const turn = smooth(3.55, 3.85, t);
+  const uh = smooth(4.35, 4.5, t);
+  let expr = 'effort';
+  if (t > 2.9) expr = 'det';
+  if (t > 3.75) expr = 'smirk';
+  if (t > 4.45) expr = 'uhoh';
+  return {
+    x: hp.x, y: hp.y, lean: -a,
+    legN: [-a * 0.6 + 8 + kick, -a * 0.6 - 18 + kick * 0.5],
+    legF: [-a * 0.6 - 6 - kick, -a * 0.6 - 30 - kick * 0.5],
+    armN: [armAngle(a), armAngle(a)], armF: [armAngle(a) + 6, armAngle(a) + 6], headTop: true,
+    f: lerp(1, 0.12, turn) + 0.5 * uh * 0, tilt: lerp(0, -6, turn),
+    expr,
+    look: uh > 0 ? [lerp(-0.2, 0.7, uh), lerp(0, -1, uh)] : [lerp(1, -0.2, turn), lerp(-0.6, 0, smooth(2.6, 3.0, t))],
+    brow: uh > 0 ? [lerp(0.3, -0.9, uh), 0] : [lerp(1, 0.3, turn), 7 * turn],
+    sweat: t > 4.5 ? smooth(4.5, 4.8, t) : 0,
+  };
+}
+
+// dust puffs at footfalls, takeoff, grab
+const puffs = [];
+function addPuff(t0, x, y, size) {
+  const pg = g({}, fx);
+  const parts = [];
+  for (let i = 0; i < 4; i++) parts.push({ node: el('circle', A({ r: 10, fill: '#efe2c8' }, 3), pg), dx: (i - 1.5) * 0.8 + (rnd() - 0.5), dy: -0.6 - rnd() * 0.5 });
+  puffs.push({ g: pg, parts, t0, x, y, size });
+}
+for (let k = 1; k / (2 * RUN_HZ) < T_JUMP; k++) {
+  const tk = k / (2 * RUN_HZ);
+  addPuff(tk, lerp(-140, 800, tk / T_JUMP) + 20, GROUND - 4, 0.8);
+}
+addPuff(T_JUMP, 830, GROUND - 4, 1.4);
+addPuff(T_GRAB, HAND[0] + 6, HAND[1] - 4, 1.0);
+// pebbles at the grab, and the chunk that breaks off at the end
+const pebbles = [];
+for (let i = 0; i < 7; i++) pebbles.push({ node: el('path', A({ d: 'M-5 -4 L5 -5 L6 4 L-4 5 Z', fill: '#b5ab95' }, 3), fx), vx: -40 + rnd() * 120, vy: -60 - rnd() * 80, t0: T_GRAB + rnd() * 0.15, rot: rnd() * 600 });
+const CHUNK0 = [1176, 548], T_CRACK = 4.35;
+const crack = el('path', { d: 'M1196 530 l-6 10 l8 6 l-6 12', fill: 'none', ...ink(4) });
+// speed lines while running/jumping
+const speed = [0, 1, 2].map(() => el('line', { ...ink(4), opacity: 0.6 }, fx));
+
+function render(t) {
+  const p = pose(t);
+  poseHero(p);
+
+  // camera: wide for the run, pushes in on the ledge after the catch
+  const push = smooth(T_GRAB + 0.1, 3.4, t);
+  const sc = lerp(1, 1.5, push), cx = lerp(960, 1080, push), cy = lerp(540, 610, push);
+  let shake = t >= T_GRAB ? 9 * Math.exp(-(t - T_GRAB) * 10) : 0;
+  shake += t >= T_CRACK ? 4 * Math.exp(-(t - T_CRACK) * 8) : 0;
+  cam.setAttribute('transform', `translate(${(shake * Math.sin(t * 95)).toFixed(2)} ${(shake * Math.cos(t * 83)).toFixed(2)}) translate(960 540) scale(${sc.toFixed(4)}) translate(${-cx} ${-cy})`);
+
+  // puffs
+  for (const pf of puffs) {
+    const d = t - pf.t0, on = d >= 0 && d < 0.5;
+    pf.g.setAttribute('display', on ? 'inline' : 'none');
+    if (!on) continue;
+    pf.parts.forEach((q) => {
+      q.node.setAttribute('cx', (pf.x + q.dx * 60 * d * pf.size).toFixed(1));
+      q.node.setAttribute('cy', (pf.y + q.dy * 40 * d * pf.size).toFixed(1));
+      q.node.setAttribute('r', ((6 + 30 * d) * pf.size).toFixed(1));
+    });
+    pf.g.setAttribute('opacity', (1 - d / 0.5).toFixed(2));
+  }
+  for (const pb of pebbles) {
+    const d = t - pb.t0, on = d >= 0 && d < 1.6;
+    pb.node.setAttribute('display', on ? 'inline' : 'none');
+    if (on) pb.node.setAttribute('transform', `translate(${(HAND[0] + pb.vx * d).toFixed(1)} ${(HAND[1] + 8 + pb.vy * d + 900 * d * d).toFixed(1)}) rotate(${(pb.rot * d).toFixed(0)})`);
+  }
+  const dc = t - T_CRACK;
+  crack.setAttribute('display', dc > -0.25 ? 'inline' : 'none');
+  if (dc < 0) chunk.setAttribute('transform', `translate(${CHUNK0[0] + (dc > -0.25 ? Math.sin(t * 120) * 1.5 : 0)} ${CHUNK0[1]})`);
+  else chunk.setAttribute('transform', `translate(${(CHUNK0[0] - 30 * dc).toFixed(1)} ${(CHUNK0[1] + 900 * dc * dc).toFixed(1)}) rotate(${(-300 * dc).toFixed(0)})`);
+
+  // speed lines trail behind him while he is moving fast
+  const moving = t < T_GRAB;
+  speed.forEach((s, i) => {
+    s.setAttribute('display', moving && t > 0.15 ? 'inline' : 'none');
+    const y = p.y - 150 + i * 60, len = 60 + 30 * Math.sin(t * 30 + i);
+    s.setAttribute('x1', (p.x - 70 - i * 20).toFixed(1)); s.setAttribute('x2', (p.x - 70 - i * 20 - len).toFixed(1));
+    s.setAttribute('y1', y.toFixed(1)); s.setAttribute('y2', y.toFixed(1));
+  });
+
+  // ambient motion
+  for (const s of fallStreaks) {
+    const y = 250 + ((s.y + t * 380) % 460) - 40;
+    s.node.setAttribute('y1', y.toFixed(1)); s.node.setAttribute('y2', (y + s.len).toFixed(1));
+  }
+  for (const b of birds) {
+    const x = b.x + t * 50, y = b.y + Math.sin(t * 2 + b.ph) * 6, f = 7 * Math.sin(t * 12 + b.ph);
+    b.node.setAttribute('d', `M${x - 12} ${y - f} Q${x - 6} ${y - 4} ${x} ${y} Q${x + 6} ${y - 4} ${x + 12} ${y - f}`);
+  }
+  for (const m of mists) m.node.setAttribute('transform', `translate(${(m.x + m.sp * t).toFixed(1)} ${m.y})`);
+  for (const v of vines) v.node.setAttribute('transform', `translate(${v.x} 540) rotate(${(2.5 * Math.sin(t * 1.6 + v.ph)).toFixed(2)})`);
+  for (const l of leafShapes) l.node.setAttribute('transform', `translate(${l.x} ${l.y}) rotate(${(l.r + 3 * Math.sin(t * 1.3 + l.x)).toFixed(2)}) scale(${l.s})`);
+}
+window.render = render;
+window.DUR = DUR;
+
+if (!location.search.includes('capture')) {
+  const t0 = performance.now();
+  (function loop() { render(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); })();
+} else {
+  render(0);
+}
+</script>
+</body>
+</html>
